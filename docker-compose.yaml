@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+  postgres:
+    image: docker.io/library/postgres:15.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: sked
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks:
+      - bot_net
+    container_name: sked_postgres
+
+  redis:
+    image: docker.io/library/redis:7.2.0
+    ports:
+      - "6379:6379"
+    networks:
+      - bot_net
+    container_name: sked_redis
+
+  sked_bot:
+    image: localhost/library/sked_bot:1.0 
+    depends_on:
+      - postgres
+    command: sh -c "/wait && python /main.py"
+    environment:
+        - WAIT_HOSTS=postgres:5432
+        - WAIT_HOSTS_TIMEOUT=300
+        - WAIT_SLEEP_INTERVAL=30
+        - WAIT_HOST_CONNECT_TIMEOUT=30
+        - DATABASE_URL=postgresql://postgres:${PGPASSWORD}@postgres/sked
+        - REDIS_URL=redis://redis:6379/0
+        - BOT_TOKEN=${BOT_TOKEN}
+    ports:
+      - "8000:8000"
+    networks:
+      - bot_net
+    container_name: sked_bot
+    volumes:
+      - creds.json:creds.json
+
+volumes:
+  db:
+
+networks:
+  bot_net: {}

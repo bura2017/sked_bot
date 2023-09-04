@@ -1,0 +1,5 @@
+creds.json
+.env
+token.pickle
+*__pycache__
+.idea/
