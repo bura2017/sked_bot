@@ -95,6 +95,30 @@ def keyword(message):
                           % (open_tag, close_tag), reply_markup=markup)
 
 
+def search_for_planners(text, keywords):
+    if text.split(maxsplit=1)[0] in keywords:
+        # Found at list one planner i text
+        return
+
+
+def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
+    if mes_date is None:
+        p = Planner(text)
+    else:
+        p = Planner(text, today=mes_date)
+    gs_id = db.get_gs(chat_id)
+    if gs_id:
+        vars.gs.SPREADSHEET_ID = gs_id
+        try:
+            vars.gs.add_user(username, user_id)
+            vars.gs.insert_planner(user_id, p.day, "\n".join(p.body))
+            logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
+                         (username, chat_title, p.day.strftime('%d/%m/%y')))
+
+        except AssertionError:
+            logging.warning("Tag was triggered but not parsed: %s" % text)
+
+
 # all cases when user sent text message
 @vars.bot.message_handler(content_types=['text'])
 def just_text(message):
@@ -152,6 +176,8 @@ def just_text(message):
         keyword(message)
     else:
         if message.forward_from is None:
+            if message.forward_sender_name is not None:
+                logging.warning("Can not find user_id for %s" % message.forward_sender_name)
             user_id = message.from_user.id
             username = message.from_user.username
         else:
@@ -163,26 +189,16 @@ def just_text(message):
             keywords = vars.DEFAULT_KEYWORDS
         if message.text.split(maxsplit=1)[0] in keywords:
             # This code implements planners handling
-            p = Planner(message.text)
-            gs_id = db.get_gs(message.chat.id)
-            if gs_id:
-                vars.gs.SPREADSHEET_ID = gs_id
-                try:
-                    vars.gs.add_user(username, user_id)
-                    vars.gs.insert_planner(user_id, p.day, "\n".join(p.body))
-                    logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
-                                 (username, message.chat.title, p.day.strftime('%d/%m/%y')))
-
-                except googleapiclient.errors.HttpError as e:
-                    logging.error(e)
-                    if e.resp.status == 404:
-                        vars.bot.send_message(message.chat.id, "Добавьте сначала google sheet для использования /add_gs")
-                    elif e.resp.status == 403:
-                        vars.bot.send_message(message.chat.id, "У меня нет прав вносить изменения в эту таблицу")
-                    else:
-                        vars.bot.send_message(message.chat.id, "Неизвестная ошибка")
-                except AssertionError:
-                    logging.warning("Tag was triggered but not parsed: %s" % message.text)
+            try:
+                handle_planner(message.text, message.chat.id, message.chat.title, username, user_id)
+            except googleapiclient.errors.HttpError as e:
+                logging.error(e)
+                if e.resp.status == 404:
+                    vars.bot.send_message(message.chat.id, "Добавьте сначала google sheet для использования /add_gs")
+                elif e.resp.status == 403:
+                    vars.bot.send_message(message.chat.id, "У меня нет прав вносить изменения в эту таблицу")
+                else:
+                    vars.bot.send_message(message.chat.id, "Неизвестная ошибка")
         else:
             # This is for unparsed messages which are ignored if chat is not private
             if message.chat.id == message.from_user.id:

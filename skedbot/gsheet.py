@@ -8,7 +8,7 @@ from google.auth.transport.requests import Request
 import logging
 from threading import Semaphore
 
-DEFAULT_DATE_FORMAT = "%d/%m/%y"
+DEFAULT_DATE_FORMAT = "%d/%m/%Y"
 semaphore = Semaphore(1)
 
 
@@ -101,7 +101,7 @@ class GoogleSheet:
             delta = end_day - last_exist_date
             rows_after = delta.days
         if rows_after:
-            self._insert_rows_after(last_row+1, rows_after, last_exist_date)
+            self._insert_rows_after(last_row+1, rows_after, last_exist_date or pdate)
 
         delta = pdate - start_day
         planner_row = str(4 + delta.days)
@@ -120,7 +120,6 @@ class GoogleSheet:
         existing_values = self._get_values(insert_range)
         for row in existing_values:
             row.extend(['']*(number_of_columns + 1 - len(row)))
-            print("hm")
         new_dates = []
         for i in range(number_of_rows):
             temp_date = start_day + timedelta(days=i)
