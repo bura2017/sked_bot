@@ -12,6 +12,7 @@ class Planner(object):
         for i in range(1, len(lines)):
             if lines[i]:
                 self.body = lines[i:]
+                break
 
         splitted = self._header.split()
         if re.match(r"^#\w+$", splitted[0]):
@@ -23,6 +24,6 @@ class Planner(object):
                 try:
                     self.day = datetime.strptime(splitted[1], "%d.%m.%y")
                 except ValueError:
-                    pass
+                    self.day = None
         else:
             self.day = datetime.now()

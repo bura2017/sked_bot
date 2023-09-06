@@ -52,6 +52,8 @@ def _psql_insert(cmd):
     try:
         with connection.cursor() as cursor1:
             cursor1.execute(cmd)
+            r = cursor1.rowcount
+            return r
     except psycopg2.errors.UniqueViolation as e:
         logging.warning("Duplicate error from postgres: %s" % e.args)
 
@@ -89,7 +91,7 @@ def get_days_and_time(user_id):
 
 
 def add_gs(chat_id, gs_id):
-    _psql_insert("update skeds set gs_id='%s' where chat_id='%s';" % (gs_id, chat_id))
+    return _psql_insert("update skeds set gs_id='%s' where chat_id='%s';" % (gs_id, chat_id))
 
 
 def update_time(user_id, hours_num):
@@ -105,7 +107,7 @@ def get_keywords(user_id):
     if r is not None:
         open_tag, close_tag = r
     else:
-        open_tag, close_tag = ('[notag]', '[notag]')
+        open_tag, close_tag = (None, None)
 
     return open_tag, close_tag
 
@@ -120,4 +122,6 @@ def update_close_tag(user_id, tag):
 
 def get_gs(chat_id):
     r = _psql_select("select gs_id from skeds where chat_id='%s';" % chat_id)
+    if r is None:
+        return None
     return r[0]

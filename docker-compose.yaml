@@ -42,7 +42,7 @@ services:
       - bot_net
     container_name: sked_bot
     volumes:
-      - creds.json:creds.json
+      - ./creds.json:/creds.json
 
 volumes:
   db:

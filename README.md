@@ -17,6 +17,6 @@ Copy .env.example to .env and fill in the variables
 Then create creds.json file with instructions from [GoogleDevelopers](https://developers.google.com/sheets/api/quickstart/python)
 
 ~~~shell
-sudo podman-compose --env-file .env up -d
+sudo podman-compose up -d
 ~~~
 

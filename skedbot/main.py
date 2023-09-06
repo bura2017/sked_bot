@@ -44,14 +44,18 @@ def add_gs_handler(message):
 def add_gs(message):
     sheet_search = re.search(r"/d/(.*?)/edit", message.text)
     try:
-        db.add_gs(message.chat.id, sheet_search.group(1))
+        if db.add_gs(message.chat.id, sheet_search.group(1)) == 0:
+            vars.bot.send_message(message.chat.id, 'Не получилось добавить таблицу в базу. Попробуйте снова команду /start')
+            raise AssertionError("0 rows affected for chat %s" % message.chat.id)
         vars.gs.SPREADSHEET_ID = sheet_search.group(1)
         vars.gs.init_sheet()
         logging.info("New spreadsheet %s" % sheet_search.group(1))
         vars.bot.send_message(message.chat.id, 'Вы добавили гугл таблицу')
+    except AttributeError:
+        vars.bot.send_message(message.chat.id, 'Не получилось достать ID таблицы из адреса. Попробуйте снова')
     except Exception as e:
         logging.error("Failed to add google sheet '%s': %s" % (message.text, e.args))
-        vars.bot.send_message(message.chat.id, 'Не получилось достать ID таблицы из адреса. Попробуйте снова')
+
     vars.bot_state[message.chat.id] = vars.DEFAULT_BOT_STATE
 
 
@@ -148,14 +152,26 @@ def just_text(message):
         keyword(message)
     else:
         keywords = db.get_keywords(message.from_user.id)
+        if not keywords[0]:
+            db.add_user(message.from_user.id, message.from_user.username, message.chat.id)
+            keywords = vars.DEFAULT_KEYWORDS
         if message.text.split(maxsplit=1)[0] in keywords:
+            # This code implements planners handling
             p = Planner(message.text)
             gs_id = db.get_gs(message.chat.id)
             if gs_id:
                 vars.gs.SPREADSHEET_ID = gs_id
                 try:
-                    vars.gs.add_user(message.from_user.username, message.from_user.id)
-                    vars.gs.insert_planner(message.from_user.id, p.day, "\n".join(p.body))
+                    if message.forward_from is None:
+                        user_id = message.from_user.id
+                        username = message.from_user.username
+                    else:
+                        user_id = message.forward_from.id
+                        username = message.forward_from.username
+                    vars.gs.add_user(username, user_id)
+                    vars.gs.insert_planner(user_id, p.day, "\n".join(p.body))
+                    logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
+                                 (username, message.chat.title, p.day.strftime('%d/%m/%y')))
 
                 except googleapiclient.errors.HttpError as e:
                     logging.error(e)
@@ -165,6 +181,12 @@ def just_text(message):
                         vars.bot.send_message(message.chat.id, "У меня нет прав вносить изменения в эту таблицу")
                     else:
                         vars.bot.send_message(message.chat.id, "Неизвестная ошибка")
+                except AssertionError:
+                    logging.warning("Tag was triggered but not parsed: %s" % message.text)
+        else:
+            # This is for unparsed messages which are ignored if chat is not private
+            if message.chat.id == message.from_user.id:
+                vars.bot.send_message(message.chat.id, "Не смог понять, чего вы хотите")
 
 
 reminder.start()
