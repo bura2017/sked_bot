@@ -5,10 +5,11 @@ from datetime import datetime, timedelta
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import re
 import logging
+from threading import Semaphore
 
 DEFAULT_DATE_FORMAT = "%d/%m/%y"
+semaphore = Semaphore(1)
 
 
 class GoogleSheet:
@@ -141,17 +142,21 @@ class GoogleSheet:
         if col is not None:
             range_ = range_[:1] + str(col) + range_[1:]
 
+        semaphore.acquire()
         self.service.spreadsheets().values().update(
             spreadsheetId=self.SPREADSHEET_ID,
             range=range_,
             valueInputOption='RAW' if raw else 'USER_ENTERED',
             body=body
         ).execute()
+        semaphore.release()
 
     def _get_values(self, range_):
+        semaphore.acquire()
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.SPREADSHEET_ID,
             range=range_
         ).execute()
         values = result.get('values', [])
+        semaphore.release()
         return values

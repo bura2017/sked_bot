@@ -151,9 +151,15 @@ def just_text(message):
         db.update_close_tag(message.from_user.id, message.text)
         keyword(message)
     else:
-        keywords = db.get_keywords(message.from_user.id)
+        if message.forward_from is None:
+            user_id = message.from_user.id
+            username = message.from_user.username
+        else:
+            user_id = message.forward_from.id
+            username = message.forward_from.username
+        keywords = db.get_keywords(user_id)
         if not keywords[0]:
-            db.add_user(message.from_user.id, message.from_user.username, message.chat.id)
+            db.add_user(user_id, username, message.chat.id)
             keywords = vars.DEFAULT_KEYWORDS
         if message.text.split(maxsplit=1)[0] in keywords:
             # This code implements planners handling
@@ -162,12 +168,6 @@ def just_text(message):
             if gs_id:
                 vars.gs.SPREADSHEET_ID = gs_id
                 try:
-                    if message.forward_from is None:
-                        user_id = message.from_user.id
-                        username = message.from_user.username
-                    else:
-                        user_id = message.forward_from.id
-                        username = message.forward_from.username
                     vars.gs.add_user(username, user_id)
                     vars.gs.insert_planner(user_id, p.day, "\n".join(p.body))
                     logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
