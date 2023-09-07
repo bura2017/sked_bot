@@ -71,7 +71,7 @@ if TOKEN is None:
 bot = telebot.TeleBot(TOKEN)
 logging.info("Bot successfully started")
 
-gs = gsheet.GoogleSheet()
+google_sheets = {}
 
 bot_state = {}
 DEFAULT_BOT_STATE = 'start'

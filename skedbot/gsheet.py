@@ -13,11 +13,12 @@ semaphore = Semaphore(1)
 
 
 class GoogleSheet:
-    SPREADSHEET_ID = "RAND_ID"
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     service = None
 
-    def __init__(self):
+    def __init__(self, spreadsheet_id):
+        self.spreadsheet_id = spreadsheet_id
+
         creds = None
         if os.path.exists('token.pickle'):
             with open('token.pickle', 'rb') as token:
@@ -35,44 +36,48 @@ class GoogleSheet:
 
         self.service = build('sheets', 'v4', credentials=creds)
 
-    def init_sheet(self):
+        # INSERT ESSENTIALS
         self._update_values('A1', [['date\student']])
+        self.user_id_range = 'B3:Z3'
+        self.last_column = None
+        # Update last_column value
+        self.get_user_ids()
 
-    def _last_column(self):
-        id_range = 'B3:Z3'
-
-        id_values = self._get_values(id_range)
-        column = chr(ord('A') + len(id_values[0]))
-        return column
+    def get_user_ids(self):
+        id_values = next(iter(self._get_values(self.user_id_range)), [])
+        self.last_column = chr(ord("A") + len(id_values))
+        return id_values
 
     def add_user(self, username, user_id):
-        name_range = 'B1:Z1'
-        id_range = 'B3:Z3'
-
-        id_values = next(iter(self._get_values(id_range)), [])
+        id_values = self.get_user_ids()
 
         if str(user_id) not in id_values:
             next_column = chr(ord('B') + len(id_values))
+            new_values = [[username],
+                          ['=countif({c}4:{c}1000, "=-")/counta({c}4:{c}1000)'
+                           .format(c=next_column)],
+                          [user_id]]
 
-            self._update_values(next_column + '1', [[username]])
-            self._update_values(next_column + '2', [['=countif({c}4:{c}1000, "=-")/counta({c}4:{c}1000)'
-                                .format(c=next_column)]])
-            self._update_values(next_column + '3', [[user_id]])
+            self._update_values('%s1:%s3' % (next_column, next_column), new_values)
             logging.info("User '%s' was successfully added to sheet" % username)
+            return next_column
         else:
             logging.info("User '%s' was already added to sheet" % username)
+            user_column = chr(ord('B') + id_values.index(str(user_id)))
+            return user_column
 
-    def insert_planner(self, user_id, pdate, text):
+    def insert_planner(self, user_id, pdate, text, user_column=None):
         assert user_id
         assert pdate
         assert text
 
+        if user_column is None:
+            id_values = self.get_user_ids()
+            user_column = chr(ord('B') + id_values.index(str(user_id)))
+
         date_range = 'A4:A1000'
-        user_id_range = 'B3:Z3'
-
-        user_id_values = self._get_values(user_id_range)[0]
-
-        existing_dates = next(iter(self._get_values(date_range)), [])
+        dates_from_sheet = self._get_values(date_range)
+        existing_dates = [d[0] for d in dates_from_sheet]
         last_row = 3 + len(existing_dates)
 
         dates = [pdate]
@@ -105,18 +110,16 @@ class GoogleSheet:
 
         delta = pdate - start_day
         planner_row = str(4 + delta.days)
-        planner_column = chr(ord("B") + user_id_values.index(str(user_id)))
-        old_text = next(iter(self._get_values(planner_column + planner_row)), None)
+        old_text = next(iter(self._get_values(user_column + planner_row)), None)
         if old_text is not None:
             new_text = "\n\n".join([old_text[0], text])
         else:
             new_text = text
-        self._update_values(planner_column+planner_row, [[new_text]], raw=True)
+        self._update_values(user_column+planner_row, [[new_text]], raw=True)
 
     def _insert_rows_before(self, number_of_rows, start_day):
-        last_column = self._last_column()
-        number_of_columns = ord(last_column) - ord("A")
-        insert_range = "A4:%s1000" % last_column
+        number_of_columns = ord(self.last_column) - ord("A")
+        insert_range = "A4:%s1000" % self.last_column
         existing_values = self._get_values(insert_range)
         for row in existing_values:
             row.extend(['']*(number_of_columns + 1 - len(row)))
@@ -142,20 +145,24 @@ class GoogleSheet:
             range_ = range_[:1] + str(col) + range_[1:]
 
         semaphore.acquire()
-        self.service.spreadsheets().values().update(
-            spreadsheetId=self.SPREADSHEET_ID,
-            range=range_,
-            valueInputOption='RAW' if raw else 'USER_ENTERED',
-            body=body
-        ).execute()
-        semaphore.release()
+        try:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=range_,
+                valueInputOption='RAW' if raw else 'USER_ENTERED',
+                body=body
+            ).execute()
+        finally:
+            semaphore.release()
 
     def _get_values(self, range_):
         semaphore.acquire()
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.SPREADSHEET_ID,
-            range=range_
-        ).execute()
-        values = result.get('values', [])
-        semaphore.release()
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=range_
+            ).execute()
+            values = result.get('values', [])
+        finally:
+            semaphore.release()
         return values

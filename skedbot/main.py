@@ -1,7 +1,11 @@
+import copy
+
+import time
 from telebot import types
 import re
 import time
 from skedbot import vars, reminder, db
+from skedbot.gsheet import GoogleSheet
 import logging
 from skedbot.planner import Planner
 import googleapiclient
@@ -47,8 +51,8 @@ def add_gs(message):
         if db.add_gs(message.chat.id, sheet_search.group(1)) == 0:
             vars.bot.send_message(message.chat.id, 'Не получилось добавить таблицу в базу. Попробуйте снова команду /start')
             raise AssertionError("0 rows affected for chat %s" % message.chat.id)
-        vars.gs.SPREADSHEET_ID = sheet_search.group(1)
-        vars.gs.init_sheet()
+        if vars.google_sheets.get(sheet_search.group(1)) is None:
+            vars.google_sheets[sheet_search.group(1)] = GoogleSheet(sheet_search.group(1))
         logging.info("New spreadsheet %s" % sheet_search.group(1))
         vars.bot.send_message(message.chat.id, 'Вы добавили гугл таблицу')
     except AttributeError:
@@ -96,9 +100,34 @@ def keyword(message):
 
 
 def search_for_planners(text, keywords):
-    if text.split(maxsplit=1)[0] in keywords:
-        # Found at list one planner i text
-        return
+    text_splitted = text.split(include_separators=True)
+    r = []
+
+    split_end = 0
+    start_ind = None
+    while True:
+        indexes = set()
+        for k in keywords:
+            try:
+                indexes.add(text_splitted[split_end:].index(k))
+            except ValueError:
+                pass
+        # Exit loop condition
+        if not indexes:
+            if start_ind is not None:
+                planner = "".join(text_splitted[start_ind:])
+                r.append(planner)
+            break
+
+        split_end = min(indexes)
+        if start_ind is None:
+            start_ind = split_end
+        else:
+            planner = "".join(text_splitted[start_ind:split_end])
+            r.append(planner)
+            start_ind = None
+
+    return r
 
 
 def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
@@ -108,13 +137,19 @@ def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
         p = Planner(text, today=mes_date)
     gs_id = db.get_gs(chat_id)
     if gs_id:
-        vars.gs.SPREADSHEET_ID = gs_id
+        if vars.google_sheets.get(gs_id, None) is None:
+            vars.google_sheets[gs_id] = GoogleSheet(gs_id)
         try:
-            vars.gs.add_user(username, user_id)
-            vars.gs.insert_planner(user_id, p.day, "\n".join(p.body))
+            user_column = vars.google_sheets[gs_id].add_user(username, user_id)
+            vars.google_sheets[gs_id].insert_planner(user_id, p.day, "\n".join(p.body), user_column=user_column)
             logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
                          (username, chat_title, p.day.strftime('%d/%m/%y')))
 
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == 429:
+                logging.error(e.reason)
+                time.sleep(10)
+                handle_planner(text, chat_id, chat_title, username, user_id, mes_date=mes_date)
         except AssertionError:
             logging.warning("Tag was triggered but not parsed: %s" % text)
 
@@ -184,26 +219,29 @@ def just_text(message):
             user_id = message.forward_from.id
             username = message.forward_from.username
         keywords = db.get_keywords(user_id)
-        if not keywords[0]:
+        if None in keywords:
             db.add_user(user_id, username, message.chat.id)
             keywords = vars.DEFAULT_KEYWORDS
-        if message.text.split(maxsplit=1)[0] in keywords:
+        planners = search_for_planners(message.text, keywords)
+        if planners:
             # This code implements planners handling
-            try:
-                handle_planner(message.text, message.chat.id, message.chat.title, username, user_id)
-            except googleapiclient.errors.HttpError as e:
-                logging.error(e)
-                if e.resp.status == 404:
-                    vars.bot.send_message(message.chat.id, "Добавьте сначала google sheet для использования /add_gs")
-                elif e.resp.status == 403:
-                    vars.bot.send_message(message.chat.id, "У меня нет прав вносить изменения в эту таблицу")
-                else:
-                    vars.bot.send_message(message.chat.id, "Неизвестная ошибка")
+            for p_text in planners:
+                try:
+                    handle_planner(p_text, message.chat.id, message.chat.title, username, user_id)
+                except googleapiclient.errors.HttpError as e:
+                    logging.error(e)
+                    if e.resp.status == 404:
+                        vars.bot.send_message(message.chat.id, "Добавьте сначала google sheet для использования /add_gs")
+                    elif e.resp.status == 403:
+                        vars.bot.send_message(message.chat.id, "У меня нет прав вносить изменения в эту таблицу")
+                    else:
+                        vars.bot.send_message(message.chat.id, "Неизвестная ошибка")
         else:
             # This is for unparsed messages which are ignored if chat is not private
             if message.chat.id == message.from_user.id:
                 vars.bot.send_message(message.chat.id, "Не смог понять, чего вы хотите")
 
 
-reminder.start()
-vars.bot.polling(none_stop=True, logger_level=logging.INFO)
+if __name__ == '__main__':
+    reminder.start()
+    vars.bot.polling(none_stop=True, logger_level=logging.INFO)
