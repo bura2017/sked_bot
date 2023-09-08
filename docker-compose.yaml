@@ -14,6 +14,7 @@ services:
     networks:
       - bot_net
     container_name: sked_postgres
+    restart: always
 
   redis:
     image: docker.io/library/redis:7.2.0
@@ -22,6 +23,7 @@ services:
     networks:
       - bot_net
     container_name: sked_redis
+    restart: always
 
   sked_bot:
     image: localhost/library/sked_bot:1.0 
@@ -43,6 +45,7 @@ services:
     container_name: sked_bot
     volumes:
       - ./creds.json:/creds.json
+    restart: always
 
 volumes:
   db:

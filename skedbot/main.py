@@ -100,7 +100,7 @@ def keyword(message):
 
 
 def search_for_planners(text, keywords):
-    text_splitted = text.split(include_separators=True)
+    text_splitted = re.split(r'(\s+)', text)
     r = []
 
     split_end = 0
@@ -109,7 +109,7 @@ def search_for_planners(text, keywords):
         indexes = set()
         for k in keywords:
             try:
-                indexes.add(text_splitted[split_end:].index(k))
+                indexes.add(text_splitted[split_end:].index(k)+split_end)
             except ValueError:
                 pass
         # Exit loop condition
@@ -120,12 +120,12 @@ def search_for_planners(text, keywords):
             break
 
         split_end = min(indexes)
-        if start_ind is None:
-            start_ind = split_end
-        else:
-            planner = "".join(text_splitted[start_ind:split_end])
-            r.append(planner)
-            start_ind = None
+        if start_ind is not None:
+            planner = "".join(text_splitted[start_ind:split_end]).strip()
+            if planner not in keywords:
+                r.append(planner)
+        start_ind = split_end
+        split_end += 1
 
     return r
 
@@ -141,7 +141,7 @@ def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
             vars.google_sheets[gs_id] = GoogleSheet(gs_id)
         try:
             user_column = vars.google_sheets[gs_id].add_user(username, user_id)
-            vars.google_sheets[gs_id].insert_planner(user_id, p.day, "\n".join(p.body), user_column=user_column)
+            vars.google_sheets[gs_id].insert_planner(user_id, p, user_column=user_column)
             logging.info("Planner from user '%s', chat '%s', date '%s' was added to google sheet" %
                          (username, chat_title, p.day.strftime('%d/%m/%y')))
 

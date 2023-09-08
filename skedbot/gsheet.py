@@ -66,10 +66,9 @@ class GoogleSheet:
             user_column = chr(ord('B') + id_values.index(str(user_id)))
             return user_column
 
-    def insert_planner(self, user_id, pdate, text, user_column=None):
+    def insert_planner(self, user_id, p, user_column=None):
         assert user_id
-        assert pdate
-        assert text
+        assert p
 
         if user_column is None:
             id_values = self.get_user_ids()
@@ -80,7 +79,11 @@ class GoogleSheet:
         existing_dates = [d[0] for d in dates_from_sheet]
         last_row = 3 + len(existing_dates)
 
-        dates = [pdate]
+        if p.end_day is None:
+            dates = [p.day]
+        else:
+            dates = [p.start_day, p.end_day]
+
         first_exist_date = last_exist_date = None
         if len(existing_dates) > 0:
             first_exist_date = datetime.strptime(existing_dates[0], DEFAULT_DATE_FORMAT)
@@ -98,6 +101,7 @@ class GoogleSheet:
                 delta = first_exist_date - start_day
                 self._insert_rows_before(delta.days, start_day)
 
+        pdate = p.start_day or p.day
         rows_after = 0
         if len(existing_dates) == 0:
             delta = end_day - start_day + timedelta(days=1)
@@ -106,16 +110,28 @@ class GoogleSheet:
             delta = end_day - last_exist_date
             rows_after = delta.days
         if rows_after:
-            self._insert_rows_after(last_row+1, rows_after, last_exist_date or pdate)
+            insert_from = pdate if last_exist_date is None else last_exist_date+timedelta(days=1)
+            self._insert_rows_after(last_row+1, rows_after, insert_from)
 
         delta = pdate - start_day
         planner_row = str(4 + delta.days)
-        old_text = next(iter(self._get_values(user_column + planner_row)), None)
-        if old_text is not None:
-            new_text = "\n\n".join([old_text[0], text])
+        if p.end_day is None:
+            extra_values_number = 0
+            planner_range = user_column+planner_row
         else:
-            new_text = text
-        self._update_values(user_column+planner_row, [[new_text]], raw=True)
+            pdays_delta = p.end_day-p.start_day
+            extra_values_number = pdays_delta.days
+            planner_range = "%s%s:%s%s" % (user_column, planner_row, user_column, int(planner_row)+pdays_delta.days)
+
+        old_text_values = self._get_values(planner_range)
+        new_text = "\n".join(p.body)
+        planner_values = [[new_text]] + [[p.continue_char]] * extra_values_number
+
+        for i, row in enumerate(old_text_values):
+            if row:
+                planner_values[i] = ["\n\n".join(row+planner_values[i])]
+
+        self._update_values(planner_range, planner_values, raw=True)
 
     def _insert_rows_before(self, number_of_rows, start_day):
         number_of_columns = ord(self.last_column) - ord("A")
@@ -134,7 +150,7 @@ class GoogleSheet:
         insert_range = "A%s:A1000" % start_row
         new_dates = []
         for i in range(number_of_rows):
-            d = start_day + timedelta(days=i+1)
+            d = start_day + timedelta(days=i)
             new_dates.append([d.strftime(DEFAULT_DATE_FORMAT)])
         self._update_values(insert_range, new_dates)
         return
