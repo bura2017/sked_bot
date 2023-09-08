@@ -26,7 +26,8 @@ try:
                 hours_number INTEGER,
                 open_tag varchar(32),
                 close_tag varchar(32),
-                chat_id BIGINT
+                chat_id BIGINT,
+                if_remind_today boolean
                 );"""
         )
 except psycopg2.errors.DuplicateTable as e:
@@ -63,9 +64,14 @@ def _psql_select(cmd):
     with connection.cursor() as cursor1:
         cursor1.execute(cmd)
         r = cursor1.fetchall()
-        if len(r) > 1:
-            raise ValueError()
-        return next(iter(r), None)
+        return r
+
+
+def _psql_select_one(cmd):
+    r = _psql_select_one(cmd)
+    if len(r) > 1:
+        raise ValueError()
+    return next(iter(r), None)
 
 
 def add_chat(chat_id, title, chat_type):
@@ -75,18 +81,19 @@ def add_chat(chat_id, title, chat_type):
 
 
 def add_user(user_id, username, chat_id):
-    _psql_insert("INSERT INTO users(id, username, reminder_days, hours_number, open_tag, close_tag, chat_id) VALUES "
-                 "(%s, '%s', '%s', %s, '%s', '%s', %s);"
-                 % (user_id, username, '{}', 0, vars.DEFAULT_OPEN_TAG, vars.DEFAULT_CLOSE_TAG, chat_id))
+    _psql_insert("INSERT INTO users(id, username, reminder_days, hours_number, open_tag, close_tag, chat_id, "
+                 "if_remind_today) VALUES "
+                 "(%s, '%s', '%s', %s, '%s', '%s', %s, %s);"
+                 % (user_id, username, '{}', 0, vars.DEFAULT_OPEN_TAG, vars.DEFAULT_CLOSE_TAG, chat_id, False))
 
 
 def get_users():
-    users = _psql_select("SELECT id FROM users;")
+    users = _psql_select_one("SELECT id FROM users;")
     return users[0]
 
 
 def get_days_and_time(user_id):
-    days, time = _psql_select("SELECT reminder_days, hours_number FROM users where id='%s';" % user_id)
+    days, time = _psql_select_one("SELECT reminder_days, hours_number FROM users where id='%s';" % user_id)
     return json.loads(days), time
 
 
@@ -103,7 +110,7 @@ def update_days(user_id, days):
 
 
 def get_keywords(user_id):
-    r = _psql_select("select open_tag, close_tag from users where id='%s';" % user_id)
+    r = _psql_select_one("select open_tag, close_tag from users where id='%s';" % user_id)
     if r is not None:
         open_tag, close_tag = r
     else:
@@ -121,7 +128,18 @@ def update_close_tag(user_id, tag):
 
 
 def get_gs(chat_id):
-    r = _psql_select("select gs_id from skeds where chat_id='%s';" % chat_id)
+    r = _psql_select_one("select gs_id from skeds where chat_id='%s';" % chat_id)
     if r is None:
         return None
     return r[0]
+
+
+def get_all_reminder_days():
+    s = _psql_select("select id, reminder_days from users;")
+
+    r = {x[0]: x[1] for x in s}
+    return r
+
+
+def update_if_remind_today(user_id, if_remind_today):
+    _psql_insert("update users set if_remind_today=%s where id='%s';" % (if_remind_today, user_id))
