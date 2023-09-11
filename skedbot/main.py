@@ -1,6 +1,3 @@
-import copy
-
-import time
 from telebot import types
 import re
 import time
@@ -243,5 +240,11 @@ def just_text(message):
 
 
 if __name__ == '__main__':
-    reminder.start()
-    vars.bot.polling(none_stop=True, logger_level=logging.INFO)
+    while True:
+        process_for_reminding = reminder.start()
+        try:
+            vars.bot.polling(none_stop=True, logger_level=logging.INFO)
+        except reminder.RestartReminder:
+            process_for_reminding.teminate()
+        except Exception as e:
+            logging.error(e.args)

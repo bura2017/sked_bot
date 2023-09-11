@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO,
                     # filemode='a')
 
 
-reminder_open_message = ""
+reminder_open_message = "Время написать планнер на сегодня"
 reminder_close_message = 'Время написать закрывающий планнер для сегодня'
 
 time_timer = 0
