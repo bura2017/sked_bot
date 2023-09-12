@@ -70,7 +70,7 @@ def _psql_select(cmd):
 
 
 def _psql_select_one(cmd):
-    r = _psql_select_one(cmd)
+    r = _psql_select(cmd)
     if len(r) > 1:
         raise ValueError()
     return next(iter(r), None)
@@ -143,19 +143,24 @@ def get_all_reminder_days():
     return r
 
 
+CLOSE_TIME_FORMAT = "%d-%m-%yT%H:%M"
+
+
 def get_open_reminders():
     s = _psql_select("select id, reminder_days from users where if_remind_open=true;")
 
-    weekday = datetime.now().weekday()
+    today_str = datetime.now().strftime("%d-%m-%yT")
+    weekday = str(datetime.now().weekday())
 
-    r = {x[0]: datetime.strptime(x[1][weekday], "%H:%M") for x in s if x[1].get(weekday) is not None}
+    days = {x[0]: json.loads(x[1]) for x in s }
+    r = {k: datetime.strptime(today_str + v[weekday], CLOSE_TIME_FORMAT) for k, v in days.items() if v.get(weekday) is not None}
     return r
 
 
 def get_close_reminders():
-    s = _psql_select("select id, remind_close_time from users where remind_close_time != null;")
+    s = _psql_select("select id, remind_close_time from users where remind_close_time is not null;")
 
-    r = {x[0]: datetime.strptime(x[1], "%d-%m-%yT%H:%M") for x in s}
+    r = {x[0]: datetime.strptime(x[1], CLOSE_TIME_FORMAT) for x in s}
     return r
 
 
@@ -167,5 +172,5 @@ def update_remind_close_time(user_id, rtime):
     if rtime is None:
         _psql_insert("update users set remind_close_time=null where id='%s';" % (user_id))
     else:
-        time_string = rtime.strftime("%d-%m-%yT%H:%M")
+        time_string = rtime.strftime(CLOSE_TIME_FORMAT)
         _psql_insert("update users set remind_close_time='%s' where id='%s';" % (time_string, user_id))

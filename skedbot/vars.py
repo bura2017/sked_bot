@@ -1,9 +1,12 @@
 import telebot
-from skedbot import gsheet
 import redis
 import os
 import logging
 import sys
+
+
+import gettext
+_ = gettext.gettext
 
 
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
@@ -14,18 +17,16 @@ logging.basicConfig(level=logging.INFO,
                     # filemode='a')
 
 
-reminder_open_message = "Время написать планнер на сегодня"
-reminder_close_message = 'Время написать закрывающий планнер для сегодня'
+reminder_open_message = _("Время написать планнер на сегодня")
+reminder_close_message = _('Время написать закрывающий планнер на сегодня')
 
-time_timer = 0
+WEEKDAYS = [_('Понедельник'), _('Вторник'), _('Среда'), _('Четверг'), _('Пятница'), _('Суббота'), _('Воскресенье')]
 
-WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-
-RETURN_BUTTON = "В главное меню"
+RETURN_BUTTON = _("В главное меню")
 DEFAULT_CLOSE_TIME = 0
 DEFAULT_KEYWORDS = (DEFAULT_OPEN_TAG, DEFAULT_CLOSE_TAG) = ("#sked", "#done")
 
-how_to_use_message = """
+how_to_use_message = _("""
 Я умею напоминать о планнерах на день и собирать ваши планнеры из разных групп/каналов.
 
 Чтобы использовать меня как напоминалку:
@@ -38,17 +39,17 @@ how_to_use_message = """
 
 По умолчанию используются теги #sked и #done для открывающего и закрывающего планнеров соответственно. 
 Чтобы это изменить используйте команду /keywords 
-"""
+""")
 
-help_message = "Вот команды, которые вы можете использовать" \
-               "\n\n" \
-               "/start - включить бота\n" \
-               "/help - открыть список всех команд\n" \
-               "/how_to_use - как использовать бота\n" \
-               "/add_gs - добавить гугл таблицу\n" \
-               "/settings - настройки напоминания о планнере\n" \
-               "/keywords - теги для открывающего и закрывающего планнера\n" \
-               "/clear - сбросить все настройки"
+help_message = _("Вот команды, которые вы можете использовать" 
+               "\n\n" 
+               "/start - включить бота\n" 
+               "/help - открыть список всех команд\n" 
+               "/how_to_use - как использовать бота\n" 
+               "/add_gs - добавить гугл таблицу\n" 
+               "/settings - настройки напоминания о планнере\n" 
+               "/keywords - теги для открывающего и закрывающего планнера\n" 
+               "/clear - сбросить все настройки")
 
 redis_url = os.getenv("REDIS_URL")
 if not redis_url:

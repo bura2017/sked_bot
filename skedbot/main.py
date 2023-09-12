@@ -6,6 +6,7 @@ from skedbot.gsheet import GoogleSheet
 import logging
 from skedbot.planner import Planner
 import googleapiclient
+from datetime import datetime, timedelta
 
 
 # start command
@@ -68,17 +69,17 @@ def settings(message):
     button2 = types.KeyboardButton("Время закрывающего планнера")
     button3 = types.KeyboardButton(vars.RETURN_BUTTON)
     markup.add(button1, button2, button3)
-    days, time = db.get_days_and_time(message.from_user.id)
-    if days:
+    udays, utime = db.get_days_and_time(message.from_user.id)
+    if udays:
         days_as_string = 'Напоминание по дням:\n'
     else:
         days_as_string = 'Напоминания выключены. \n'
-    for d, t in days.items():
+    for d, t in udays.items():
         days_as_string += '%s %s\n' % (vars.WEEKDAYS[int(d)], t)
     vars.bot_state[message.from_user.id] = 'settings'
     vars.bot.send_message(message.from_user.id, f'Режим настройки напоминалки.\nТекущие настройки:\n%s\n'
                                            f'Напоминание о закрывающем планнере через %s часов после открывающего'
-                          % (days_as_string, time), reply_markup=markup)
+                          % (days_as_string, utime), reply_markup=markup)
 
 
 # adding special words to search for
@@ -149,6 +150,7 @@ def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
                 handle_planner(text, chat_id, chat_title, username, user_id, mes_date=mes_date)
         except AssertionError:
             logging.warning("Tag was triggered but not parsed: %s" % text)
+    return p
 
 
 # all cases when user sent text message
@@ -188,13 +190,20 @@ def just_text(message):
             else:
                 try:
                     day_number = vars.WEEKDAYS.index(parsed_line.group(1))
-                    time.strptime(parsed_line.group(2), '%H:%M')
+                    datetime.strptime(parsed_line.group(2), '%H:%M')
                     days[day_number] = parsed_line.group(2)
                 except ValueError:
                     vars.bot.send_message(message.chat.id, "Не смог разобрать строку: %s" % l, parse_mode='html')
         db.update_days(message.from_user.id, days)
+        today = datetime.now()
+        time_to_remind = days.get(today.weekday())
+        if time_to_remind is not None:
+            time_obj_to_remind = datetime.strptime(today.strftime("%d-%m-%yT") + time_to_remind, "%d-%m-%yT%H:%M")
+            if today < time_obj_to_remind:
+                db.update_if_remind(message.from_user.id, True)
         vars.bot.send_message(message.chat.id, "Время напоминаний успешно обновлено")
         settings(message)
+        raise reminder.RestartReminder()
     elif state == 'keywords':
         if message.text == 'Тег для открывающего планнера':
             vars.bot_state[message.chat.id] = 'open_tag'
@@ -224,7 +233,17 @@ def just_text(message):
             # This code implements planners handling
             for p_text in planners:
                 try:
-                    handle_planner(p_text, message.chat.id, message.chat.title, username, user_id)
+                    p = handle_planner(p_text, message.chat.id, message.chat.title, username, user_id)
+                    if p.tag == keywords[0]:
+                        # open planner
+                        db.update_if_remind(user_id, False)
+                        _, close_time = db.get_days_and_time(user_id)
+                        if close_time != 0:
+                            remind_time_obj = datetime.now()+timedelta(hours=close_time)
+                            db.update_remind_close_time(user_id, remind_time_obj)
+                    elif p.tag == keywords[1]:
+                        # closing planner
+                        db.update_remind_close_time(user_id, None)
                 except googleapiclient.errors.HttpError as e:
                     logging.error(e)
                     if e.resp.status == 404:
@@ -245,6 +264,6 @@ if __name__ == '__main__':
         try:
             vars.bot.polling(none_stop=True, logger_level=logging.INFO)
         except reminder.RestartReminder:
-            process_for_reminding.teminate()
+            process_for_reminding.terminate()
         except Exception as e:
             logging.error(e.args)
