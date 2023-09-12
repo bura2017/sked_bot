@@ -11,9 +11,9 @@ _ = gettext.gettext
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 logging.basicConfig(level=logging.INFO,
                     format=LOGGING_FORMAT,
-                    stream=sys.stdout)
-                    # filename='/var/log/sked.log',
-                    # filemode='a')
+                    # stream=sys.stdout)
+                    filename='/var/log/sked.log',
+                    filemode='a')
 
 
 reminder_open_message = _("Время написать планнер на сегодня")
