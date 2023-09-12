@@ -7,6 +7,11 @@ import logging
 from skedbot.planner import Planner
 import googleapiclient
 from datetime import datetime, timedelta
+import json
+import six
+
+import gettext
+_ = gettext.gettext
 
 
 # start command
@@ -57,9 +62,9 @@ def add_gs(message):
         vars.bot.send_message(message.chat.id, 'Не получилось достать ID таблицы из адреса. Попробуйте снова')
     except Exception as e:
         logging.error("Failed to add google sheet '%s': %s" % (message.text, e.args))
-        vars.bot.send_message("Ошибка: %s" % e.args)
-
-    vars.bot_state[message.chat.id] = vars.DEFAULT_BOT_STATE
+        vars.bot.send_message(message.chat.id, "Ошибка: %s" % "; ".join(e.args), parse_mode='html')
+    finally:
+        vars.bot_state[message.chat.id] = vars.DEFAULT_BOT_STATE
 
 
 # command to change settings
@@ -152,6 +157,82 @@ def handle_planner(text, chat_id, chat_title, username, user_id, mes_date=None):
         except AssertionError:
             logging.warning("Tag was triggered but not parsed: %s" % text)
     return p
+
+
+@vars.bot.message_handler(commands=['clear'])
+def clear_user(message):
+    db.delete_user(message.from_user.id)
+    vars.bot.send_message(message.from_user.id, _("До новых встреч"))
+
+
+@vars.bot.message_handler(commands=['import_history'])
+def import_history_handle(message):
+    vars.bot.send_message(message.chat.id, vars.how_to_import_history)
+
+
+def search_for_planners_from_history(text, keywords):
+    # Text is expected to be list
+    is_planner = False
+    planner_text = ''
+    r = []
+    for t in text:
+        if isinstance(t, six.string_types):
+            # handle planner maybe
+            planner_text += t
+        elif isinstance(t, dict):
+            # familiar_types = ['hashtag', 'link', 'mention', 'pre', 'code', 'italic', 'mention_name', 'phone', 'bold',
+            #                   'text_link', 'strikethrough', 'bot_command', 'spoiler']
+            # if t['type'] not in familiar_types:
+            #     print("New type %s " % t['type'])
+            if t['type'] == 'hashtag' and t['text'] in keywords:
+                if is_planner:
+                    r.append(planner_text)
+                is_planner = True
+                planner_text = t['text']
+            else:
+                planner_text += t['text']
+        else:
+            logging.critical("I don't know what is it")
+            assert False
+
+    if is_planner:
+        r.append(planner_text)
+    return r
+
+
+def import_history(pdata, start_from_mes=None):
+    chat_title = pdata.get('name', '[not specified]')
+    chat_id = pdata.get('id')
+    messages = pdata.get('messages', [])
+
+    for mes in messages:
+        if start_from_mes is not None and mes['id'] < int(start_from_mes):
+            continue
+        text = mes.get('text', None)
+        if isinstance(text, list):
+            username = mes['from']
+            user_id = re.match(r"^user(.*)$", mes['from_id']).group(1)
+            mes_date = datetime.strptime(mes['date'], "%Y-%m-%dT%H:%M:%S")
+            keywords = db.get_keywords(user_id)
+            if None in keywords:
+                db.add_user(user_id, username, user_id)
+                keywords = vars.DEFAULT_KEYWORDS
+            planners = search_for_planners_from_history(text, keywords)
+            for p_text in planners:
+                try:
+                    handle_planner(p_text, chat_id, chat_title, username, user_id, mes_date=mes_date)
+                except Exception as e:
+                    print(json.dumps(mes))
+                    raise e
+
+
+@vars.bot.message_handler(content_types=['document'])
+def document_handler(message):
+    logging.info("Got history, start importing ")
+    file_info = vars.bot.get_file(message.document.file_id)
+    downloaded_file = vars.bot.download_file(file_info.file_path)
+    data = json.loads(downloaded_file)
+    import_history(data)
 
 
 # all cases when user sent text message

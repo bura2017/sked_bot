@@ -11,13 +11,20 @@ _ = gettext.gettext
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 logging.basicConfig(level=logging.INFO,
                     format=LOGGING_FORMAT,
-                    # stream=sys.stdout)
-                    filename='/var/log/sked.log',
-                    filemode='a')
+                    stream=sys.stdout)
+                    # filename='/var/log/sked.log',
+                    # filemode='a')
 
 
 reminder_open_message = _("Время написать планнер на сегодня")
 reminder_close_message = _('Время написать закрывающий планнер на сегодня')
+
+how_to_import_history = _("""1. Зайдите в настройки чата, чью историю вы бы хотели загрузить
+2. Выберите команду 'Export chat history'
+3. Снимите все галочки, чтобы остался только текст
+4. В поле 'Format' выберите 'Machine-readable JSON'
+5. 'Save' -> 'Export' 
+6. Загрузите файл result.json в чат с ботом и отправьте""")
 
 WEEKDAYS = [_('Понедельник'), _('Вторник'), _('Среда'), _('Четверг'), _('Пятница'), _('Суббота'), _('Воскресенье')]
 
@@ -48,7 +55,8 @@ help_message = _("Вот команды, которые вы можете исп
                "/add_gs - добавить гугл таблицу\n" 
                "/settings - настройки напоминания о планнере\n" 
                "/keywords - теги для открывающего и закрывающего планнера\n" 
-               "/clear - сбросить все настройки")
+               "/clear - сбросить все настройки\n"
+               "/import_history - добавить планнеры из истории")
 
 TOKEN = os.getenv("BOT_TOKEN")
 if TOKEN is None:

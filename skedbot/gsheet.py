@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import logging
+import sys
 from threading import Semaphore
 
 DEFAULT_DATE_FORMAT = "%d/%m/%Y"
@@ -16,9 +17,19 @@ class GoogleSheet:
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     service = None
 
-    def __init__(self, spreadsheet_id):
-        self.spreadsheet_id = spreadsheet_id
+    def __init__(self, spreadsheet_id=None):
+        self._service()
+        if spreadsheet_id is not None:
+            self.spreadsheet_id = spreadsheet_id
 
+            # INSERT ESSENTIALS
+            self._update_values('A1', [['date\student']])
+            self.user_id_range = 'B3:Z3'
+            self.last_column = None
+            # Update last_column value
+            self.get_user_ids()
+
+    def _service(self):
         creds = None
         if os.path.exists('token.pickle'):
             with open('token.pickle', 'rb') as token:
@@ -39,13 +50,6 @@ class GoogleSheet:
                 logging.info("token.pickle is saved")
 
         self.service = build('sheets', 'v4', credentials=creds)
-
-        # INSERT ESSENTIALS
-        self._update_values('A1', [['date\student']])
-        self.user_id_range = 'B3:Z3'
-        self.last_column = None
-        # Update last_column value
-        self.get_user_ids()
 
     def get_user_ids(self):
         id_values = next(iter(self._get_values(self.user_id_range)), [])
@@ -186,3 +190,8 @@ class GoogleSheet:
         finally:
             semaphore.release()
         return values
+
+
+if __name__ == '__main__':
+    logging.basicConfig(stream=sys.stdout)
+    GoogleSheet()

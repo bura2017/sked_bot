@@ -35,6 +35,7 @@ services:
     container_name: sked_bot
     volumes:
       - ./creds.json:/creds.json:Z
+      - ./token.pickle:/token.pickle:Z
       - /var/log/sked.log:/var/log/sked.log:Z
     restart: always
 

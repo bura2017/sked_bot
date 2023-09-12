@@ -27,6 +27,10 @@ Create logs file:
 ~~~shell
 sudo touch /var/log/sked.log
 ~~~
+Generate _token.pickle_ for Google Sheets access. Execute command and grant privileges to the application
+~~~shell
+python skedbot/gsheet.py
+~~~
 Launch podman compose
 ~~~shell
 sudo podman-compose up -d

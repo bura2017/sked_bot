@@ -79,14 +79,15 @@ def _psql_select_one(cmd):
 def add_chat(chat_id, title, chat_type):
     _psql_insert("INSERT INTO skeds(chat_id, title, tg_type) VALUES "
                  "(%s, '%s', '%s');"
-                 % (chat_id, title, chat_type))
+                 % (abs(int(chat_id)), title, chat_type))
 
 
 def add_user(user_id, username, chat_id):
     _psql_insert("INSERT INTO users(id, username, reminder_days, hours_number, open_tag, close_tag, chat_id, "
                  "if_remind_open, remind_close_time) VALUES "
                  "(%s, '%s', '%s', %s, '%s', '%s', %s, %s, %s);"
-                 % (user_id, username, '{}', 0, vars.DEFAULT_OPEN_TAG, vars.DEFAULT_CLOSE_TAG, chat_id, False, 'null'))
+                 % (user_id, username, '{}', 0, vars.DEFAULT_OPEN_TAG, vars.DEFAULT_CLOSE_TAG, abs(int(chat_id)),
+                    False, 'null'))
 
 
 def get_users():
@@ -100,7 +101,7 @@ def get_days_and_time(user_id):
 
 
 def add_gs(chat_id, gs_id):
-    return _psql_insert("update skeds set gs_id='%s' where chat_id='%s';" % (gs_id, chat_id))
+    return _psql_insert("update skeds set gs_id='%s' where chat_id='%s';" % (gs_id, abs(int(chat_id))))
 
 
 def update_time(user_id, hours_num):
@@ -130,7 +131,7 @@ def update_close_tag(user_id, tag):
 
 
 def get_gs(chat_id):
-    r = _psql_select_one("select gs_id from skeds where chat_id='%s';" % chat_id)
+    r = _psql_select_one("select gs_id from skeds where chat_id='%s';" % abs(int(chat_id)))
     if r is None:
         return None
     return r[0]
@@ -174,3 +175,7 @@ def update_remind_close_time(user_id, rtime):
     else:
         time_string = rtime.strftime(CLOSE_TIME_FORMAT)
         _psql_insert("update users set remind_close_time='%s' where id='%s';" % (time_string, user_id))
+
+
+def delete_user(user_id):
+    _psql_insert("delete from users where id='%s'" % user_id )
