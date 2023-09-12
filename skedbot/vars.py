@@ -1,5 +1,4 @@
 import telebot
-import redis
 import os
 import logging
 import sys
@@ -12,9 +11,9 @@ _ = gettext.gettext
 LOGGING_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 logging.basicConfig(level=logging.INFO,
                     format=LOGGING_FORMAT,
-                    stream=sys.stdout)
-                    # filename='/var/log/sked.log',
-                    # filemode='a')
+                    # stream=sys.stdout)
+                    filename='/var/log/sked.log',
+                    filemode='a')
 
 
 reminder_open_message = _("Время написать планнер на сегодня")
@@ -51,23 +50,20 @@ help_message = _("Вот команды, которые вы можете исп
                "/keywords - теги для открывающего и закрывающего планнера\n" 
                "/clear - сбросить все настройки")
 
-redis_url = os.getenv("REDIS_URL")
-if not redis_url:
-    logging.error("Missing environment variable: REDIS_URL")
-    raise ValueError("Missing REDIS_URL")
-
-redis = redis.Redis.from_url(redis_url)
-
 TOKEN = os.getenv("BOT_TOKEN")
 if TOKEN is None:
     # Then try to get TOKEN another way
-    with open('.env', 'r') as f:
-        for line in f:
-            if line.startswith('#') or not line.strip():
-                continue
-            key, value = line.strip().split('=', 1)
-            if key == 'BOT_TOKEN':
-                TOKEN = value
+    try:
+        with open('.env', 'r') as f:
+            for line in f:
+                if line.startswith('#') or not line.strip():
+                    continue
+                key, value = line.strip().split('=', 1)
+                if key == 'BOT_TOKEN':
+                    TOKEN = value
+    except FileNotFoundError:
+        logging.error("Couldn't find env variable BOT_TOKEN or file .env")
+        exit(-1)
 
 bot = telebot.TeleBot(TOKEN)
 logging.info("Bot successfully started")

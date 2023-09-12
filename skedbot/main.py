@@ -48,7 +48,7 @@ def add_gs(message):
     try:
         if db.add_gs(message.chat.id, sheet_search.group(1)) == 0:
             vars.bot.send_message(message.chat.id, 'Не получилось добавить таблицу в базу. Попробуйте снова команду /start')
-            raise AssertionError("0 rows affected for chat %s" % message.chat.id)
+            raise AssertionError("Chat not found in DB" % message.chat.id)
         if vars.google_sheets.get(sheet_search.group(1)) is None:
             vars.google_sheets[sheet_search.group(1)] = GoogleSheet(sheet_search.group(1))
         logging.info("New spreadsheet %s" % sheet_search.group(1))
@@ -57,6 +57,7 @@ def add_gs(message):
         vars.bot.send_message(message.chat.id, 'Не получилось достать ID таблицы из адреса. Попробуйте снова')
     except Exception as e:
         logging.error("Failed to add google sheet '%s': %s" % (message.text, e.args))
+        vars.bot.send_message("Ошибка: %s" % e.args)
 
     vars.bot_state[message.chat.id] = vars.DEFAULT_BOT_STATE
 
